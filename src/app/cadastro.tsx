@@ -25,6 +25,8 @@ export default function CadastroScreen() {
   const [senha, setSenha] = useState('');
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
 
   async function handleCadastro() {
     if (!usuario || !email || !senha || !confirmarSenha) {
@@ -75,12 +77,14 @@ export default function CadastroScreen() {
         <View style={styles.card}>
           <Text style={styles.label}>Usuário</Text>
           <TextInput
-            style={styles.input}
-            placeholder="como quer ser chamado?"
-            placeholderTextColor="#a0b8bf"
-            value={usuario}
-            onChangeText={setUsuario}
-          />
+  style={styles.input}
+  placeholder="como quer ser chamado?"
+  placeholderTextColor="#a0b8bf"
+  value={usuario}
+  onChangeText={setUsuario}
+  maxLength={30}
+/>
+  
           <Text style={styles.label}>E-mail</Text>
           <TextInput
             style={styles.input}
@@ -91,24 +95,35 @@ export default function CadastroScreen() {
             keyboardType="email-address"
             autoCapitalize="none"
           />
-          <Text style={styles.label}>Senha</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="mínimo 8 caracteres"
-            placeholderTextColor="#a0b8bf"
-            value={senha}
-            onChangeText={setSenha}
-            secureTextEntry
-          />
-          <Text style={styles.label}>Confirmar senha</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="repita a senha"
-            placeholderTextColor="#a0b8bf"
-            value={confirmarSenha}
-            onChangeText={setConfirmarSenha}
-            secureTextEntry
-          />
+         <Text style={styles.label}>Senha</Text>
+<View style={styles.inputRow}>
+  <TextInput
+    style={[styles.input, { flex: 1, marginBottom: 0 }]}
+    placeholder="mínimo 8 caracteres"
+    placeholderTextColor="#a0b8bf"
+    value={senha}
+    onChangeText={setSenha}
+    secureTextEntry={!mostrarSenha}
+  />
+  <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarSenha(!mostrarSenha)}>
+    <Text>{mostrarSenha ? '👁️' : '🙈'}</Text>
+  </TouchableOpacity>
+</View>
+
+<Text style={styles.label}>Confirmar senha</Text>
+<View style={styles.inputRow}>
+  <TextInput
+    style={[styles.input, { flex: 1, marginBottom: 0 }]}
+    placeholder="repita a senha"
+    placeholderTextColor="#a0b8bf"
+    value={confirmarSenha}
+    onChangeText={setConfirmarSenha}
+    secureTextEntry={!mostrarConfirmarSenha}
+  />
+  <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarConfirmarSenha(!mostrarConfirmarSenha)}>
+    <Text>{mostrarConfirmarSenha ? '👁️' : '🙈'}</Text>
+  </TouchableOpacity>
+</View>
 
           <TouchableOpacity
             style={styles.btnPrimary}
@@ -137,6 +152,18 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#dff0f4',
   },
+  inputRow: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  borderWidth: 1,
+  borderColor: '#b6dae0',
+  borderRadius: 12,
+  backgroundColor: '#ffffff',
+  marginBottom: 16,
+},
+olhinho: {
+  padding: 12,
+},
   scroll: {
     padding: 24,
     justifyContent: 'center',

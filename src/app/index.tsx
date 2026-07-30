@@ -1,28 +1,20 @@
 import { auth } from '@/config/firebase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { useEffect, useState } from 'react';
+
 import {
-  signInWithEmailAndPassword,
-} from 'firebase/auth';
-import { useState } from 'react';
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    Alert,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 
-const firebaseConfig = {
-  apiKey: "AIzaSyAIoGfd_HFsRvrVSmimyvFfedelbzBqdz4",
-  authDomain: "expotec-ta-tudo-bem.firebaseapp.com",
-  projectId: "expotec-ta-tudo-bem",
-  storageBucket: "expotec-ta-tudo-bem.firebasestorage.app",
-  messagingSenderId: "272494947580",
-  appId: "1:272494947580:web:e5efbf80e699f83556bb79"
-};
 
 
 export default function LoginScreen() {
@@ -30,26 +22,46 @@ export default function LoginScreen() {
   const [senha, setSenha] = useState('');
   const [lembrar, setLembrar] = useState(false);
   const [carregando, setCarregando] = useState(false);
+  const [mostrarSenha, setMostrarSenha] = useState(false);
 
   async function handleLogin() {
-    if (!email || !senha) {
-      Alert.alert('Atenção', 'Preencha email e senha.');
+  if (!email || !senha) {
+    Alert.alert('Atenção', 'Preencha email e senha.');
+    return;
+  }
+  setCarregando(true);
+  try {
+    const credencial = await signInWithEmailAndPassword(auth, email, senha);
+    if (!credencial.user.emailVerified) {
+      Alert.alert('Email não verificado', 'Verifique seu email antes de entrar.');
       return;
     }
-    setCarregando(true);
-    try {
-     const credencial = await signInWithEmailAndPassword(auth, email, senha);
-      if (!credencial.user.emailVerified) {
-        Alert.alert('Email não verificado', 'Verifique seu email antes de entrar.');
-        return;
-      }
-      router.replace('/home');
-    } catch (error: any) {
-      Alert.alert('Erro', 'Email ou senha incorretos.');
-    } finally {
-      setCarregando(false);
+    if (lembrar) {
+      await AsyncStorage.setItem('email_salvo', email);
+      await AsyncStorage.setItem('lembrar', 'true');
+    } else {
+      await AsyncStorage.removeItem('email_salvo');
+      await AsyncStorage.removeItem('lembrar');
+    }
+    router.replace('/home');
+  } catch (error: any) {
+    Alert.alert('Erro', 'Email ou senha incorretos.');
+  } finally {
+    setCarregando(false);
+  }
+}
+
+useEffect(() => {
+  async function carregarEmail() {
+    const emailSalvo = await AsyncStorage.getItem('email_salvo');
+    const lembrarSalvo = await AsyncStorage.getItem('lembrar');
+    if (emailSalvo && lembrarSalvo === 'true') {
+      setEmail(emailSalvo);
+      setLembrar(true);
     }
   }
+  carregarEmail();
+}, []);
 
   return (
     <KeyboardAvoidingView
@@ -75,15 +87,21 @@ export default function LoginScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
         />
+
         <Text style={styles.label}>Senha</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="••••••••"
-          placeholderTextColor="#a0b8bf"
-          value={senha}
-          onChangeText={setSenha}
-          secureTextEntry
-        />
+        <View style={styles.inputRow}>
+          <TextInput
+            style={[styles.input, { flex: 1, marginBottom: 0 }]}
+            placeholder="••••••••"
+            placeholderTextColor="#a0b8bf"
+            value={senha}
+            onChangeText={setSenha}
+            secureTextEntry={!mostrarSenha}
+          />
+          <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarSenha(!mostrarSenha)}>
+            <Text>{mostrarSenha ? '👁️' : '🙈'}</Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity
           style={styles.lembrarRow}
@@ -120,6 +138,7 @@ export default function LoginScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -127,118 +146,49 @@ const styles = StyleSheet.create({
     padding: 24,
     justifyContent: 'center',
   },
-  logoArea: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
+  logoArea: { alignItems: 'center', marginBottom: 32 },
   logoIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 72, height: 72, borderRadius: 36,
     backgroundColor: '#b6dae0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: '#8bb8c2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 12, elevation: 4,
   },
-  logoEmoji: {
-    fontSize: 36,
-  },
-  logoTitle: {
-    fontSize: 28,
-    fontWeight: '600',
-    color: '#2a6b7c',
-  },
-  logoSub: {
-    fontSize: 14,
-    color: '#5a8a96',
-    marginTop: 4,
-    textAlign: 'center',
-  },
+  logoEmoji: { fontSize: 36 },
+  logoTitle: { fontSize: 28, fontWeight: '600', color: '#2a6b7c' },
+  logoSub: { fontSize: 14, color: '#5a8a96', marginTop: 4, textAlign: 'center' },
   card: {
-    backgroundColor: '#f0f8fa',
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: '#8bb8c2',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    backgroundColor: '#f0f8fa', borderRadius: 20, padding: 24,
     elevation: 3,
   },
-  label: {
-    fontSize: 13,
-    color: '#5a8a96',
-    marginBottom: 6,
-  },
+  label: { fontSize: 13, color: '#5a8a96', marginBottom: 6 },
   input: {
-    borderWidth: 1,
-    borderColor: '#b6dae0',
-    borderRadius: 12,
-    padding: 12,
-    fontSize: 15,
-    marginBottom: 16,
-    backgroundColor: '#ffffff',
-    color: '#2a6b7c',
+    borderWidth: 1, borderColor: '#b6dae0', borderRadius: 12,
+    padding: 12, fontSize: 15, marginBottom: 16,
+    backgroundColor: '#ffffff', color: '#2a6b7c',
   },
+  inputRow: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1, borderColor: '#b6dae0', borderRadius: 12,
+    backgroundColor: '#ffffff', marginBottom: 16,
+  },
+  olhinho: { padding: 12 },
   lembrarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 10,
+    flexDirection: 'row', alignItems: 'center',
+    marginBottom: 20, gap: 10,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: '#b6dae0',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 22, height: 22, borderRadius: 6,
+    borderWidth: 1.5, borderColor: '#b6dae0',
+    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
   },
-  checkboxAtivo: {
-    backgroundColor: '#b6dae0',
-    borderColor: '#8bb8c2',
-  },
-  checkmark: {
-    color: '#2a6b7c',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  lembrarText: {
-    fontSize: 13,
-    color: '#5a8a96',
-  },
+  checkboxAtivo: { backgroundColor: '#b6dae0', borderColor: '#8bb8c2' },
+  checkmark: { color: '#2a6b7c', fontSize: 14, fontWeight: '700' },
+  lembrarText: { fontSize: 13, color: '#5a8a96' },
   btnPrimary: {
-    backgroundColor: '#b6dae0',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 12,
-    shadowColor: '#8bb8c2',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
+    backgroundColor: '#b6dae0', borderRadius: 12, padding: 14,
+    alignItems: 'center', marginTop: 4, marginBottom: 12, elevation: 3,
   },
-  btnPrimaryText: {
-    color: '#2a6b7c',
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  linkText: {
-    color: '#4a8a96',
-    fontSize: 13,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  linkDestaque: {
-    color: '#2a6b7c',
-    fontWeight: '700',
-  },
+  btnPrimaryText: { color: '#2a6b7c', fontSize: 15, fontWeight: '600' },
+  linkText: { color: '#4a8a96', fontSize: 13, textAlign: 'center', marginTop: 8 },
+  linkDestaque: { color: '#2a6b7c', fontWeight: '700' },
 });

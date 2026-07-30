@@ -41,3 +41,6 @@ example
 # generated native folders
 /ios
 /android
+
+# chave da IA
+src/config/openrouter.ts
