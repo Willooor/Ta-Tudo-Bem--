@@ -1,10 +1,14 @@
 import { auth } from '@/config/firebase';
 import { OPENROUTER_API_KEY } from '@/config/openrouter';
-import { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
     Modal,
+    PanResponder,
+    Platform,
     ScrollView,
     StyleSheet,
     Text,
@@ -12,6 +16,8 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+
+
 
 const FRASES_DIA = [
   'Cada pequeno passo conta. Vai lá!',
@@ -35,7 +41,7 @@ export default function HobbiesScreen() {
   const usuario = auth.currentUser;
   const nome = usuario?.displayName?.split(' ')[0] || 'você';
   const frase = FRASES_DIA[new Date().getDay() % FRASES_DIA.length];
-
+const [streak, setStreak] = useState(0);
   const [etapa, setEtapa] = useState<Etapa>('inicial');
   const [hobbie, setHobbie] = useState('');
   const [quantidade, setQuantidade] = useState(10);
@@ -58,6 +64,9 @@ model: 'poolside/laguna-xs-2.1:free',
   });
   const data = await response.json();
   console.log('Resposta OpenRouter:', JSON.stringify(data));
+
+
+  
   return data.choices[0].message.content;
 }
  const PALAVRAS_ALERTA = ['se cortar', 'me cortar', 'automutilação', 'me machucar', 'se machucar', 'suicídio', 'me matar', 'me suicidar'];
@@ -73,6 +82,52 @@ async function gerarChecklist() {
     setModalFinal(true);
     return;
   }
+
+async function atualizarStreak() {
+  try {
+    const hoje = new Date().toDateString();
+    const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
+    const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+
+    if (ultimoDia === hoje) return;
+    
+    const novoStreak = ultimoDia === ontem.toDateString() ? streakAtual + 1 : 1;
+    await AsyncStorage.setItem('streak_count', String(novoStreak));
+    await AsyncStorage.setItem('streak_ultimo_dia', hoje);
+    setStreak(novoStreak);
+  } catch (e) {
+    console.log('Erro ao atualizar streak:', e);
+  }
+}
+atualizarStreak();
+
+useEffect(() => {
+  async function calcularStreak() {
+    try {
+      const hoje = new Date().toDateString();
+      const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
+      const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
+      const ontem = new Date();
+      ontem.setDate(ontem.getDate() - 1);
+
+      if (ultimoDia === hoje) {
+        setStreak(streakAtual);
+      } else if (ultimoDia === ontem.toDateString()) {
+        setStreak(streakAtual);
+      } else if (!ultimoDia) {
+        setStreak(0);
+      } else {
+        await AsyncStorage.setItem('streak_count', '0');
+        setStreak(0);
+      }
+    } catch (e) {
+      console.log('Erro streak:', e);
+    }
+  }
+  calcularStreak();
+}, []);
 
   setCarregando(true);
   try {
@@ -109,12 +164,36 @@ async function gerarChecklist() {
     }
   }
 
-function toggleItem(id: string) {
-  const atualizado = itens.map(i => i.id === id ? { ...i, marcado: !i.marcado } : i);
-  setItens(atualizado);
-  if (atualizado.every(i => i.marcado) && atualizado.length > 0) {
-    finalizar();
+
+  
+async function atualizarStreak() {
+  try {
+    const hoje = new Date().toDateString();
+    const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
+    const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
+    const ontem = new Date();
+    ontem.setDate(ontem.getDate() - 1);
+
+    if (ultimoDia === hoje) return;
+    
+    const novoStreak = ultimoDia === ontem.toDateString() ? streakAtual + 1 : 1;
+    await AsyncStorage.setItem('streak_count', String(novoStreak));
+    await AsyncStorage.setItem('streak_ultimo_dia', hoje);
+    setStreak(novoStreak);
+  } catch (e) {
+    console.log('Erro ao atualizar streak:', e);
   }
+}
+atualizarStreak();
+  
+function toggleItem(id: string) {
+  setItens(prev => {
+    const atualizado = prev.map(i => i.id === id ? { ...i, marcado: !i.marcado } : i);
+    if (atualizado.every(i => i.marcado) && atualizado.length > 0) {
+      setTimeout(() => finalizar(), 300);
+    }
+    return atualizado;
+  });
 }
 
   function resetar() {
@@ -128,44 +207,57 @@ function toggleItem(id: string) {
   const marcados = itens.filter(i => i.marcado).length;
   const progresso = itens.length > 0 ? marcados / itens.length : 0;
 
-  if (etapa === 'inicial') {
-    return (
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior="padding"
-        keyboardVerticalOffset={80}
-      >
-        <View style={styles.roboArea}>
-          <View style={styles.roboBolinha}>
-            <Text style={styles.roboEmoji}>🤖</Text>
+const swipePan = useRef(
+  PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20 && Math.abs(g.dy) < 40,
+    onPanResponderRelease: (_, g) => {
+      if (g.dx > 60) router.push('/home');
+    },
+  })
+).current;
+
+if (etapa === 'inicial') {
+  return (
+    <KeyboardAvoidingView
+      style={styles.container} {...swipePan.panHandlers}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <View style={styles.roboBolinha}>
+          <Text style={styles.roboEmoji}>🤖</Text>
+        </View>
+        <Text style={styles.saudacao}>Olá, {nome}! 👋</Text>
+        <Text style={styles.frase}>{frase}</Text>
+        {streak > 0 && (
+          <View style={styles.streakContainer}>
+            <Text style={styles.streakTexto}>🔥 {streak} {streak === 1 ? 'dia seguido' : 'dias seguidos'}!</Text>
           </View>
-          <Text style={styles.saudacao}>Olá, {nome}! 👋</Text>
-          <Text style={styles.frase}>{frase}</Text>
-        </View>
-        <View style={styles.inputArea}>
-          <TextInput
-            style={styles.inputHobbie}
-            value={hobbie}
-            onChangeText={setHobbie}
-            placeholder="Me conta seus hobbies..."
-            placeholderTextColor="#a0b8bf"
-            multiline
-          />
-          <TouchableOpacity
-            style={[styles.btnEnviar, !hobbie.trim() && { opacity: 0.4 }]}
-            onPress={() => hobbie.trim() && setEtapa('refinamento')}
-            disabled={!hobbie.trim()}
-          >
-            <Text style={styles.btnEnviarTexto}>→</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    );
-  }
+        )}
+      </View>
+      <View style={styles.inputArea}>
+        <TextInput
+          style={styles.inputHobbie}
+          value={hobbie}
+          onChangeText={setHobbie}
+          placeholder="Me conta seus hobbies..."
+          placeholderTextColor="#a0b8bf"
+          multiline
+        />
+        <TouchableOpacity
+          style={[styles.btnEnviar, !hobbie.trim() && { opacity: 0.4 }]}
+          onPress={() => hobbie.trim() && setEtapa('refinamento')}
+          disabled={!hobbie.trim()}
+        >
+          <Text style={styles.btnEnviarTexto}>→</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
 
   if (etapa === 'refinamento') {
     return (
-      <ScrollView style={styles.container} contentContainerStyle={{ padding: 24 }}>
+      <ScrollView style={styles.container} {...swipePan.panHandlers} contentContainerStyle={{ padding: 24 }}>
         <View style={{ alignSelf: 'center', marginBottom: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#b6dae0', alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontSize: 28 }}>🤖</Text>
         </View>
@@ -210,7 +302,7 @@ function toggleItem(id: string) {
           {carregando ? (
             <ActivityIndicator color="#2a6b7c" />
           ) : (
-            <Text style={styles.btnGerarTexto}>Gerar checklist ✨</Text>
+            <Text style={styles.btnGerarTexto}>Gerar lista </Text>
           )}
         </TouchableOpacity>
 
@@ -222,7 +314,7 @@ function toggleItem(id: string) {
   }
 
   return (
-    <View style={styles.container}>
+<View style={styles.container} {...swipePan.panHandlers}>
       <View style={styles.checklistHeader}>
         <TouchableOpacity onPress={() => setEtapa('refinamento')}>
           <Text style={styles.linkDiscret}>Refazer prompt</Text>
@@ -289,7 +381,15 @@ const styles = StyleSheet.create({
   roboEmoji: { fontSize: 40 },
   saudacao: { fontSize: 22, fontWeight: '600', color: '#2a6b7c', marginBottom: 8 },
   frase: { fontSize: 14, color: '#5a8a96', textAlign: 'center', lineHeight: 22 },
-  inputArea: { flexDirection: 'row', alignItems: 'flex-end', padding: 16, gap: 12, backgroundColor: '#f0f8fa', borderTopWidth: 0.5, borderTopColor: '#b6dae0' },
+inputArea: { 
+  flexDirection: 'row', 
+  alignItems: 'flex-end', 
+  padding: 16, 
+  gap: 12, 
+  backgroundColor: '#f0f8fa', 
+  borderTopWidth: 0.5, 
+  borderTopColor: '#b6dae0',
+},
   inputHobbie: { flex: 1, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#2a6b7c', borderWidth: 0.5, borderColor: '#b6dae0', maxHeight: 100 },
   btnEnviar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2a6b7c', alignItems: 'center', justifyContent: 'center' },
   btnEnviarTexto: { color: '#fff', fontSize: 20 },
@@ -334,4 +434,6 @@ const styles = StyleSheet.create({
   modalMensagem: { fontSize: 15, color: '#2a6b7c', textAlign: 'center', lineHeight: 24 },
   btnNovaLista: { backgroundColor: '#b6dae0', borderRadius: 12, padding: 12, paddingHorizontal: 24 },
   btnNovaListaTexto: { color: '#2a6b7c', fontWeight: '600' },
+  streakContainer: { marginTop: 16, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 0.5, borderColor: '#b6dae0' },
+streakTexto: { fontSize: 14, color: '#2a6b7c', fontWeight: '600' },
 });

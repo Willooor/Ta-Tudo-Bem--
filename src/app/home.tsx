@@ -1,9 +1,10 @@
 import { auth, db } from '@/config/firebase';
 import { router, useFocusEffect } from 'expo-router';
 import { collection, deleteDoc, doc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
     Modal,
+    PanResponder,
     ScrollView,
     StyleSheet,
     Text,
@@ -188,8 +189,18 @@ export default function HomeScreen() {
     setAnoSel(a);
   }
 
+const swipePan = useRef(
+  PanResponder.create({
+    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20 && Math.abs(g.dy) < 40,
+    onPanResponderRelease: (_, g) => {
+      if (g.dx > 60) router.push('/memorias');
+      else if (g.dx < -60) router.push('/hobbies');
+    },
+  })
+).current;
+
   return (
-    <View style={styles.container}>
+<View style={styles.container} {...swipePan.panHandlers}>
       <View style={styles.topbar}>
         <TouchableOpacity onPress={() => setCalAberto(true)}>
           <Text style={styles.dataBtn}>{dataFormatada} ▾</Text>
@@ -269,10 +280,10 @@ export default function HomeScreen() {
       )}
 
       <View style={styles.navbar}>
-        <TouchableOpacity style={styles.btn} onPress={() => setAbaAtiva('memorias')}>
-          <Text style={[styles.btnIcon, abaAtiva === 'memorias' && styles.btnIconAtivo]}>📷</Text>
-          <Text style={styles.btnLabel}>Memórias</Text>
-        </TouchableOpacity>
+     <TouchableOpacity style={styles.btn} onPress={() => router.push('/memorias')}>
+  <Text style={[styles.btnIcon, abaAtiva === 'memorias' && styles.btnIconAtivo]}>📷</Text>
+  <Text style={styles.btnLabel}>Memórias</Text>
+</TouchableOpacity>
         <TouchableOpacity style={styles.btn} onPress={() => setAbaAtiva('diario')}>
           <Text style={[styles.btnIcon, abaAtiva === 'diario' && styles.btnIconAtivo]}>📖</Text>
           <Text style={styles.btnLabel}>Diário</Text>
@@ -339,6 +350,7 @@ export default function HomeScreen() {
               <Text style={styles.pinFechar}>Cancelar</Text>
             </TouchableOpacity>
           </View>
+          
           <View style={{ padding: 20, gap: 16 }}>
             <Text style={styles.pinDescricao}>Digite o PIN para abrir "{folhaPendente?.titulo ?? ''}"</Text>
             <TextInput
@@ -415,18 +427,7 @@ const styles = StyleSheet.create({
   ordenacaoOpcaoAtiva: { backgroundColor: '#b6dae0' },
   ordenacaoOpcaoTexto: { fontSize: 13, color: '#5a8a96' },
   ordenacaoOpcaoTextoAtivo: { color: '#2a6b7c', fontWeight: '600' },
- pinContainer: { 
-  position: 'absolute', 
-  bottom: 0, 
-  left: 0, 
-  right: 0, 
-  top: '50%',  // muda esse valor, quanto menor mais alto
-  backgroundColor: '#f0f8fa',
-  borderTopLeftRadius: 20, 
-  borderTopRightRadius: 20,
-  borderWidth: 0.5, 
-  borderColor: '#b6dae0' 
-},
+  pinContainer: { position: 'absolute', bottom: 0, left: 0, right: 0, top: '35%', backgroundColor: '#f0f8fa', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 0.5, borderColor: '#b6dae0' },
   pinBarra: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#b6dae0', alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   pinHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 0.5, borderBottomColor: '#b6dae0' },
   pinTitulo: { fontSize: 14, fontWeight: '600', color: '#2a6b7c' },
