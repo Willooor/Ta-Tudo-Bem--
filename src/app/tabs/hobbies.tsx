@@ -1,13 +1,12 @@
 import { auth } from '@/config/firebase';
 import { OPENROUTER_API_KEY } from '@/config/openrouter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
+    Image,
     KeyboardAvoidingView,
     Modal,
-    PanResponder,
     Platform,
     ScrollView,
     StyleSheet,
@@ -16,8 +15,6 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-
-
 
 const FRASES_DIA = [
   'Cada pequeno passo conta. Vai lá!',
@@ -41,7 +38,7 @@ export default function HobbiesScreen() {
   const usuario = auth.currentUser;
   const nome = usuario?.displayName?.split(' ')[0] || 'você';
   const frase = FRASES_DIA[new Date().getDay() % FRASES_DIA.length];
-const [streak, setStreak] = useState(0);
+  const [streak, setStreak] = useState(0);
   const [etapa, setEtapa] = useState<Etapa>('inicial');
   const [hobbie, setHobbie] = useState('');
   const [quantidade, setQuantidade] = useState(10);
@@ -50,6 +47,55 @@ const [streak, setStreak] = useState(0);
   const [carregando, setCarregando] = useState(false);
   const [mensagemFinal, setMensagemFinal] = useState('');
   const [modalFinal, setModalFinal] = useState(false);
+
+  const PALAVRAS_ALERTA = ['se cortar', 'me cortar', 'automutilação', 'me machucar', 'se machucar', 'suicídio', 'me matar', 'me suicidar'];
+
+  useEffect(() => {
+    async function calcularStreak() {
+      try {
+        const hoje = new Date().toDateString();
+        const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
+        const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
+        const ontem = new Date();
+        ontem.setDate(ontem.getDate() - 1);
+
+        if (ultimoDia === hoje) {
+          setStreak(streakAtual);
+        } else if (ultimoDia === ontem.toDateString()) {
+          setStreak(streakAtual);
+        } else if (!ultimoDia) {
+          setStreak(0);
+        } else {
+          await AsyncStorage.setItem('streak_count', '0');
+          setStreak(0);
+        }
+      } catch (e) {
+        console.log('Erro streak:', e);
+      }
+    }
+    calcularStreak();
+  }, []);
+
+  // ✅ Função normal (sem hooks dentro)
+  async function atualizarStreak() {
+    try {
+      const hoje = new Date().toDateString();
+      const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
+      const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
+      const ontem = new Date();
+      ontem.setDate(ontem.getDate() - 1);
+
+      if (ultimoDia === hoje) return;
+      
+      const novoStreak = ultimoDia === ontem.toDateString() ? streakAtual + 1 : 1;
+      await AsyncStorage.setItem('streak_count', String(novoStreak));
+      await AsyncStorage.setItem('streak_ultimo_dia', hoje);
+      setStreak(novoStreak);
+    } catch (e) {
+      console.log('Erro ao atualizar streak:', e);
+    }
+  }
+
 async function chamarIA(prompt: string): Promise<string> {
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -58,139 +104,70 @@ async function chamarIA(prompt: string): Promise<string> {
       'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
     },
     body: JSON.stringify({
-model: 'poolside/laguna-xs-2.1:free',
+      model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free',
       messages: [{ role: 'user', content: prompt }],
     }),
   });
   const data = await response.json();
-  console.log('Resposta OpenRouter:', JSON.stringify(data));
-
-
-  
+  console.log('Resposta:', JSON.stringify(data));
   return data.choices[0].message.content;
 }
- const PALAVRAS_ALERTA = ['se cortar', 'me cortar', 'automutilação', 'me machucar', 'se machucar', 'suicídio', 'me matar', 'me suicidar'];
 
-async function gerarChecklist() {
-  if (!hobbie.trim()) return;
-  
-  const hobbieLower = hobbie.toLowerCase();
-  const temAlerta = PALAVRAS_ALERTA.some(p => hobbieLower.includes(p));
-  
-  if (temAlerta) {
-    setMensagemFinal('Percebi que você pode estar passando por um momento difícil. 💙\n\nVocê não está sozinho(a). Se precisar de apoio, o CVV atende 24h pelo número 188 ou pelo site cvv.org.br.\n\nEstou aqui se quiser conversar sobre outro hobbie.');
-    setModalFinal(true);
-    return;
-  }
-
-async function atualizarStreak() {
-  try {
-    const hoje = new Date().toDateString();
-    const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
-    const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
-    const ontem = new Date();
-    ontem.setDate(ontem.getDate() - 1);
-
-    if (ultimoDia === hoje) return;
+  // ✅ Função normal (sem hooks dentro)
+  async function gerarChecklist() {
+    if (!hobbie.trim()) return;
     
-    const novoStreak = ultimoDia === ontem.toDateString() ? streakAtual + 1 : 1;
-    await AsyncStorage.setItem('streak_count', String(novoStreak));
-    await AsyncStorage.setItem('streak_ultimo_dia', hoje);
-    setStreak(novoStreak);
-  } catch (e) {
-    console.log('Erro ao atualizar streak:', e);
-  }
-}
-atualizarStreak();
-
-useEffect(() => {
-  async function calcularStreak() {
-    try {
-      const hoje = new Date().toDateString();
-      const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
-      const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
-      const ontem = new Date();
-      ontem.setDate(ontem.getDate() - 1);
-
-      if (ultimoDia === hoje) {
-        setStreak(streakAtual);
-      } else if (ultimoDia === ontem.toDateString()) {
-        setStreak(streakAtual);
-      } else if (!ultimoDia) {
-        setStreak(0);
-      } else {
-        await AsyncStorage.setItem('streak_count', '0');
-        setStreak(0);
-      }
-    } catch (e) {
-      console.log('Erro streak:', e);
+    const hobbieLower = hobbie.toLowerCase();
+    const temAlerta = PALAVRAS_ALERTA.some(p => hobbieLower.includes(p));
+    
+    if (temAlerta) {
+      setMensagemFinal('Percebi que você pode estar passando por um momento difícil. 💙\n\nVocê não está sozinho(a). Se precisar de apoio, o CVV atende 24h pelo número 188 ou pelo site cvv.org.br.\n\nEstou aqui se quiser conversar sobre outro hobbie.');
+      setModalFinal(true);
+      return;
     }
-  }
-  calcularStreak();
-}, []);
 
-  setCarregando(true);
-  try {
-    const localTexto = local === 'casa' ? 'dentro de casa' : local === 'fora' ? 'fora de casa' : 'em qualquer lugar';
-    const prompt = `Crie uma lista de ${quantidade} atividades curtas e práticas relacionadas ao hobbie: "${hobbie}". As atividades devem ser realizadas ${localTexto}. Responda APENAS com as atividades numeradas, uma por linha, sem introdução ou explicação. Exemplo:\n1. Atividade aqui\n2. Outra atividade`;
-    const texto = await chamarIA(prompt);
-    const linhas = texto.split('\n').filter((l: string) => l.trim());
-    const novosItens = linhas.map((linha: string, i: number) => ({
-      id: `${Date.now()}-${i}`,
-      texto: linha.replace(/^\d+\.\s*/, '').trim(),
-      marcado: false,
-    }));
-    setItens(novosItens);
-    setEtapa('checklist');
-  } catch (error) {
-    console.log('Erro ao gerar checklist:', error);
-  } finally {
-    setCarregando(false);
-  }
-}
-  async function finalizar() {
     setCarregando(true);
     try {
-      const marcados = itens.filter(i => i.marcado).length;
-      const total = itens.length;
-      const prompt = `O usuário ${nome} fez um checklist de hobbies relacionado a "${hobbie}" e completou ${marcados} de ${total} itens. Escreva uma mensagem curta (máximo 3 frases) de incentivo e carinho em português. Se completou tudo, celebre muito! Se completou parcialmente, incentive a continuar. Se não completou nada, diga que já está orgulhoso só de ter tentado e que amanhã é um novo dia. Seja acolhedor e mencione o hobbie.`;
+      const localTexto = local === 'casa' ? 'dentro de casa' : local === 'fora' ? 'fora de casa' : 'em qualquer lugar';
+      const prompt = `Crie uma lista de ${quantidade} atividades curtas e práticas relacionadas ao hobbie: "${hobbie}". As atividades devem ser realizadas ${localTexto}. Responda APENAS com as atividades numeradas, uma por linha, sem introdução ou explicação. Exemplo:\n1. Atividade aqui\n2. Outra atividade`;
       const texto = await chamarIA(prompt);
-      setMensagemFinal(texto);
-      setModalFinal(true);
+      const linhas = texto.split('\n').filter((l: string) => l.trim());
+      const novosItens = linhas.map((linha: string, i: number) => ({
+        id: `${Date.now()}-${i}`,
+        texto: linha.replace(/^\d+\.\s*/, '').trim(),
+        marcado: false,
+      }));
+      setItens(novosItens);
+      setEtapa('checklist');
     } catch (error) {
-      console.log('Erro ao finalizar:', error);
+      console.log('Erro ao gerar checklist:', error);
     } finally {
       setCarregando(false);
     }
   }
 
-
-  
-async function atualizarStreak() {
+ async function finalizar(itensAtuais?: Item[]) {
+  setCarregando(true);
   try {
-    const hoje = new Date().toDateString();
-    const ultimoDia = await AsyncStorage.getItem('streak_ultimo_dia');
-    const streakAtual = parseInt(await AsyncStorage.getItem('streak_count') || '0');
-    const ontem = new Date();
-    ontem.setDate(ontem.getDate() - 1);
-
-    if (ultimoDia === hoje) return;
-    
-    const novoStreak = ultimoDia === ontem.toDateString() ? streakAtual + 1 : 1;
-    await AsyncStorage.setItem('streak_count', String(novoStreak));
-    await AsyncStorage.setItem('streak_ultimo_dia', hoje);
-    setStreak(novoStreak);
-  } catch (e) {
-    console.log('Erro ao atualizar streak:', e);
+    const lista = itensAtuais || itens;
+    const marcados = lista.filter(i => i.marcado).length;
+    const total = lista.length;
+    const prompt = `O usuário ${nome} fez um checklist de hobbies relacionado a "${hobbie}" e completou ${marcados} de ${total} itens. Escreva uma mensagem curta (máximo 3 frases) de incentivo e carinho em português. Se completou tudo, celebre muito! Se completou parcialmente, incentive a continuar. Se não completou nada, diga que já está orgulhoso só de ter tentado e que amanhã é um novo dia. Seja acolhedor e mencione o hobbie.`;
+    const texto = await chamarIA(prompt);
+    setMensagemFinal(texto);
+    setModalFinal(true);
+  } catch (error) {
+    console.log('Erro ao finalizar:', error);
+  } finally {
+    setCarregando(false);
   }
 }
-atualizarStreak();
-  
+
 function toggleItem(id: string) {
   setItens(prev => {
     const atualizado = prev.map(i => i.id === id ? { ...i, marcado: !i.marcado } : i);
     if (atualizado.every(i => i.marcado) && atualizado.length > 0) {
-      setTimeout(() => finalizar(), 300);
+      setTimeout(() => finalizar(atualizado), 300);  // ← passa os itens atualizados
     }
     return atualizado;
   });
@@ -207,59 +184,56 @@ function toggleItem(id: string) {
   const marcados = itens.filter(i => i.marcado).length;
   const progresso = itens.length > 0 ? marcados / itens.length : 0;
 
-const swipePan = useRef(
-  PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20 && Math.abs(g.dy) < 40,
-    onPanResponderRelease: (_, g) => {
-      if (g.dx > 60) router.push('/home');
-    },
-  })
-).current;
-
-if (etapa === 'inicial') {
-  return (
-    <KeyboardAvoidingView
-      style={styles.container} {...swipePan.panHandlers}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <View style={styles.roboBolinha}>
-          <Text style={styles.roboEmoji}>🤖</Text>
-        </View>
-        <Text style={styles.saudacao}>Olá, {nome}! 👋</Text>
-        <Text style={styles.frase}>{frase}</Text>
-        {streak > 0 && (
-          <View style={styles.streakContainer}>
-            <Text style={styles.streakTexto}>🔥 {streak} {streak === 1 ? 'dia seguido' : 'dias seguidos'}!</Text>
+  if (etapa === 'inicial') {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <View style={styles.roboBolinha}>
+            <Image
+              source={require('@/imagens/robo_reto.jpeg')}
+              style={styles.roboImagem}
+            />
           </View>
-        )}
-      </View>
-      <View style={styles.inputArea}>
-        <TextInput
-          style={styles.inputHobbie}
-          value={hobbie}
-          onChangeText={setHobbie}
-          placeholder="Me conta seus hobbies..."
-          placeholderTextColor="#a0b8bf"
-          multiline
-        />
-        <TouchableOpacity
-          style={[styles.btnEnviar, !hobbie.trim() && { opacity: 0.4 }]}
-          onPress={() => hobbie.trim() && setEtapa('refinamento')}
-          disabled={!hobbie.trim()}
-        >
-          <Text style={styles.btnEnviarTexto}>→</Text>
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
-  );
-}
+          <Text style={styles.saudacao}>Olá, {nome}! 👋</Text>
+          <Text style={styles.frase}>{frase}</Text>
+          {streak > 0 && (
+            <View style={styles.streakContainer}>
+              <Text style={styles.streakTexto}>🔥 {streak} {streak === 1 ? 'dia seguido' : 'dias seguidos'}!</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.inputArea}>
+          <TextInput
+            style={styles.inputHobbie}
+            value={hobbie}
+            onChangeText={setHobbie}
+            placeholder="Me conta seus hobbies..."
+            placeholderTextColor="#a0b8bf"
+            multiline
+          />
+          <TouchableOpacity
+            style={[styles.btnEnviar, !hobbie.trim() && { opacity: 0.4 }]}
+            onPress={() => hobbie.trim() && setEtapa('refinamento')}
+            disabled={!hobbie.trim()}
+          >
+            <Text style={styles.btnEnviarTexto}>➔</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
 
   if (etapa === 'refinamento') {
     return (
-      <ScrollView style={styles.container} {...swipePan.panHandlers} contentContainerStyle={{ padding: 24 }}>
+      <ScrollView style={styles.container} contentContainerStyle={{ padding: 24 }}>
         <View style={{ alignSelf: 'center', marginBottom: 20, width: 56, height: 56, borderRadius: 28, backgroundColor: '#b6dae0', alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontSize: 28 }}>🤖</Text>
+          <Image
+            source={require('@/imagens/robo_reto.jpeg')}
+            style={{ width: 40, height: 40, borderRadius: 20 }}
+          />
         </View>
         <Text style={styles.tituloRefinamento}>Ótimo! Agora me conta mais...</Text>
 
@@ -279,19 +253,22 @@ if (etapa === 'inicial') {
         <Text style={styles.label}>Onde vai realizar?</Text>
         <View style={styles.localRow}>
           {[
-            { valor: 'casa', emoji: '🏠', label: 'Em casa' },
-            { valor: 'fora', emoji: '🌳', label: 'Fora' },
-            { valor: 'qualquer', emoji: '🤷', label: 'Tanto faz' },
-          ].map(op => (
-            <TouchableOpacity
-              key={op.valor}
-              style={[styles.localBtn, local === op.valor && styles.localBtnAtivo]}
-              onPress={() => setLocal(op.valor as 'casa' | 'fora' | 'qualquer')}
-            >
-              <Text style={styles.localEmoji}>{op.emoji}</Text>
-              <Text style={[styles.localTexto, local === op.valor && styles.localTextoAtivo]}>{op.label}</Text>
-            </TouchableOpacity>
-          ))}
+  { valor: 'casa', imagem: require('@/imagens/casa.jpeg'), label: 'Em casa' },
+  { valor: 'fora', imagem: require('@/imagens/arvore.jpeg'), label: 'Fora' },
+  { valor: 'qualquer', imagem: require('@/imagens/robo_confuso.jpeg'), label: 'Tanto faz' },
+].map(op => (
+  <TouchableOpacity
+    key={op.valor}
+    style={[styles.localBtn, local === op.valor && styles.localBtnAtivo]}
+    onPress={() => setLocal(op.valor as 'casa' | 'fora' | 'qualquer')}
+  >
+    <Image
+      source={op.imagem}
+      style={styles.localImagem}
+    />
+    <Text style={[styles.localTexto, local === op.valor && styles.localTextoAtivo]}>{op.label}</Text>
+  </TouchableOpacity>
+))}
         </View>
 
         <TouchableOpacity
@@ -314,7 +291,7 @@ if (etapa === 'inicial') {
   }
 
   return (
-<View style={styles.container} {...swipePan.panHandlers}>
+    <View style={styles.container}>
       <View style={styles.checklistHeader}>
         <TouchableOpacity onPress={() => setEtapa('refinamento')}>
           <Text style={styles.linkDiscret}>Refazer prompt</Text>
@@ -354,7 +331,7 @@ if (etapa === 'inicial') {
       </ScrollView>
 
       <View style={styles.footerBtns}>
-        <TouchableOpacity style={styles.btnFinalizar} onPress={finalizar} disabled={carregando}>
+        <TouchableOpacity style={styles.btnFinalizar} onPress={() => finalizar()} disabled={carregando}>
           {carregando ? <ActivityIndicator color="#2a6b7c" /> : <Text style={styles.btnFinalizarTexto}>Finalizar 🎉</Text>}
         </TouchableOpacity>
       </View>
@@ -362,7 +339,10 @@ if (etapa === 'inicial') {
       <Modal visible={modalFinal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalEmoji}>🤖</Text>
+            <Image
+              source={require('@/imagens/robo_reto.jpeg')}
+              style={{ width: 48, height: 48, borderRadius: 24 }}
+            />
             <Text style={styles.modalMensagem}>{mensagemFinal}</Text>
             <TouchableOpacity style={styles.btnNovaLista} onPress={resetar}>
               <Text style={styles.btnNovaListaTexto}>Nova lista</Text>
@@ -376,23 +356,22 @@ if (etapa === 'inicial') {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#dff0f4' },
-  roboArea: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  roboBolinha: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#b6dae0', alignItems: 'center', justifyContent: 'center', marginBottom: 20, elevation: 3 },
-  roboEmoji: { fontSize: 40 },
+  roboBolinha: { width: 160, height: 160, borderRadius: 80, backgroundColor: '#b6dae0', alignItems: 'center', justifyContent: 'center', marginBottom: 20, elevation: 3, overflow: 'hidden' },
+  roboImagem: { width: 148, height: 148, borderRadius: 74 },
   saudacao: { fontSize: 22, fontWeight: '600', color: '#2a6b7c', marginBottom: 8 },
   frase: { fontSize: 14, color: '#5a8a96', textAlign: 'center', lineHeight: 22 },
-inputArea: { 
-  flexDirection: 'row', 
-  alignItems: 'flex-end', 
-  padding: 16, 
-  gap: 12, 
-  backgroundColor: '#f0f8fa', 
-  borderTopWidth: 0.5, 
-  borderTopColor: '#b6dae0',
-},
+  inputArea: { 
+    flexDirection: 'row', 
+    alignItems: 'flex-end', 
+    padding: 36, 
+    gap: 3, 
+    backgroundColor: '#f0f8fa', 
+    borderTopWidth: 0.5, 
+    borderTopColor: '#b6dae0',
+  },
   inputHobbie: { flex: 1, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 12, fontSize: 15, color: '#2a6b7c', borderWidth: 0.5, borderColor: '#b6dae0', maxHeight: 100 },
-  btnEnviar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#2a6b7c', alignItems: 'center', justifyContent: 'center' },
-  btnEnviarTexto: { color: '#fff', fontSize: 20 },
+  btnEnviar: { width: 54, height: 44, borderRadius: 22, backgroundColor: '#2a6b7c', alignItems: 'center', justifyContent: 'center' },
+  btnEnviarTexto: { color: '#fff', fontSize: 25 },
   tituloRefinamento: { fontSize: 18, fontWeight: '600', color: '#2a6b7c', marginBottom: 24, textAlign: 'center' },
   label: { fontSize: 13, color: '#5a8a96', marginBottom: 10, marginTop: 16 },
   qtdRow: { flexDirection: 'row', gap: 12 },
@@ -403,7 +382,7 @@ inputArea: {
   localRow: { flexDirection: 'row', gap: 12 },
   localBtn: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#b6dae0', alignItems: 'center', backgroundColor: '#fff' },
   localBtnAtivo: { backgroundColor: '#b6dae0', borderColor: '#8bb8c2' },
-  localEmoji: { fontSize: 24, marginBottom: 4 },
+  localImagem: { width: 84, height: 84, marginBottom: 4 },
   localTexto: { fontSize: 12, color: '#5a8a96' },
   localTextoAtivo: { color: '#2a6b7c', fontWeight: '500' },
   btnGerar: { backgroundColor: '#b6dae0', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 32 },
@@ -430,10 +409,9 @@ inputArea: {
   btnFinalizarTexto: { color: '#2a6b7c', fontSize: 15, fontWeight: '600' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   modalCard: { backgroundColor: '#f0f8fa', borderRadius: 20, padding: 24, alignItems: 'center', gap: 16, borderWidth: 0.5, borderColor: '#b6dae0' },
-  modalEmoji: { fontSize: 48 },
   modalMensagem: { fontSize: 15, color: '#2a6b7c', textAlign: 'center', lineHeight: 24 },
   btnNovaLista: { backgroundColor: '#b6dae0', borderRadius: 12, padding: 12, paddingHorizontal: 24 },
   btnNovaListaTexto: { color: '#2a6b7c', fontWeight: '600' },
   streakContainer: { marginTop: 16, backgroundColor: '#fff', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 0.5, borderColor: '#b6dae0' },
-streakTexto: { fontSize: 14, color: '#2a6b7c', fontWeight: '600' },
+  streakTexto: { fontSize: 14, color: '#2a6b7c', fontWeight: '600' },
 });

@@ -6,10 +6,9 @@ export default function Layout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="cadastro" />
       <Stack.Screen name="verificacao" />
-      <Stack.Screen name="home" />
+      <Stack.Screen name="tabs" />
       <Stack.Screen name="folha" />
-      <Stack.Screen name="hobbies" />
-      <Stack.Screen name="memorias" />
+       <Stack.Screen name="sobre" />
     </Stack>
   );
 }

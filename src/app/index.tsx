@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 
 import {
     Alert,
+    Image,
     KeyboardAvoidingView,
     Platform,
     StyleSheet,
@@ -43,7 +44,7 @@ export default function LoginScreen() {
       await AsyncStorage.removeItem('email_salvo');
       await AsyncStorage.removeItem('lembrar');
     }
-    router.replace('/home');
+    router.replace('/tabs/home');
   } catch (error: any) {
     Alert.alert('Erro', 'Email ou senha incorretos.');
   } finally {
@@ -70,7 +71,10 @@ useEffect(() => {
     >
       <View style={styles.logoArea}>
         <View style={styles.logoIcon}>
-          <Text style={styles.logoEmoji}>☀</Text>
+         <Image
+              source={require('@/imagens/robo_reto.jpeg')}
+              style={styles.roboImagem}
+            />
         </View>
         <Text style={styles.logoTitle}>Tá tudo bem?</Text>
         <Text style={styles.logoSub}>Às vezes, só escrever o que pensa é o melhor remédio.</Text>
@@ -88,21 +92,23 @@ useEffect(() => {
           autoCapitalize="none"
         />
 
-        <Text style={styles.label}>Senha</Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={[styles.input, { flex: 1, marginBottom: 0 }]}
-            placeholder="••••••••"
-            placeholderTextColor="#a0b8bf"
-            value={senha}
-            onChangeText={setSenha}
-            secureTextEntry={!mostrarSenha}
-          />
-          <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarSenha(!mostrarSenha)}>
-            <Text>{mostrarSenha ? '👁️' : '🙈'}</Text>
-          </TouchableOpacity>
-        </View>
-
+      <Text style={styles.label}>Senha</Text>
+<View style={styles.inputRow}>
+  <TextInput
+    style={[styles.inputSemBorda, { flex: 1 }]}  
+    placeholder="••••••••"
+    placeholderTextColor="#a0b8bf"
+    value={senha}
+    onChangeText={setSenha}
+    secureTextEntry ={!mostrarSenha}
+  />
+  <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarSenha(!mostrarSenha)}>
+    <Image
+      source={mostrarSenha ? require('@/imagens/olho.jpeg') : require('@/imagens/olho_fechado.jpeg')}
+      style={{ width: 24, height: 24 }}
+    />
+  </TouchableOpacity>
+</View>
         <TouchableOpacity
           style={styles.lembrarRow}
           onPress={() => setLembrar(!lembrar)}
@@ -133,6 +139,16 @@ useEffect(() => {
             <Text style={styles.linkDestaque}>Registre-se.</Text>
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+  onPress={() => router.push('/sobre')}
+  style={{ marginTop: 16, alignSelf: 'center', padding: 10 }}
+>
+  <Text style={{ fontSize: 14, color: '#5a8a96' }}>
+     <Text style={{ fontWeight: 'bold', color: '#2a6b7c' }}>Sobre o APP</Text>
+  </Text>
+</TouchableOpacity>
+
       </View>
     </KeyboardAvoidingView>
   );
@@ -140,6 +156,11 @@ useEffect(() => {
 
 
 const styles = StyleSheet.create({
+  inputSemBorda: {
+  padding: 12,
+  fontSize: 15,
+  color: '#2a6b7c',
+},
   container: {
     flex: 1,
     backgroundColor: '#dff0f4',
@@ -148,10 +169,10 @@ const styles = StyleSheet.create({
   },
   logoArea: { alignItems: 'center', marginBottom: 32 },
   logoIcon: {
-    width: 72, height: 72, borderRadius: 36,
+    width: 78, height: 78, borderRadius: 36,
     backgroundColor: '#b6dae0',
     alignItems: 'center', justifyContent: 'center',
-    marginBottom: 12, elevation: 4,
+    marginBottom: 14, elevation: 4,
   },
   logoEmoji: { fontSize: 36 },
   logoTitle: { fontSize: 28, fontWeight: '600', color: '#2a6b7c' },
@@ -191,4 +212,5 @@ const styles = StyleSheet.create({
   btnPrimaryText: { color: '#2a6b7c', fontSize: 15, fontWeight: '600' },
   linkText: { color: '#4a8a96', fontSize: 13, textAlign: 'center', marginTop: 8 },
   linkDestaque: { color: '#2a6b7c', fontWeight: '700' },
+  roboImagem: { width: 72, height: 72, borderRadius: 36 },
 });

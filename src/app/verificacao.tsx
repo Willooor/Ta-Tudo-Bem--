@@ -55,7 +55,7 @@ export default function VerificacaoScreen() {
     }
     await user.reload();
     if (user.emailVerified) {
-      router.replace('/home');
+      router.replace('/tabs/home');
     } else {
       mostrarMensagem('Seu email ainda não foi verificado. Clique no link enviado.', 'aviso');
     }

@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import FaceDetection from '@react-native-ml-kit/face-detection';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as MediaLibrary from 'expo-media-library';
-import { router, useFocusEffect } from 'expo-router';
-import { addDoc, collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { useFocusEffect } from 'expo-router';
+import { addDoc, collection, deleteDoc, doc, getDocs, orderBy, query } from 'firebase/firestore';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
@@ -12,15 +12,13 @@ import {
     FlatList,
     Image,
     Modal,
-    PanResponder,
     ScrollView,
     Share,
     StyleSheet,
     Text,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
-
 
 const { width } = Dimensions.get('window');
 const TAMANHO_FOTO = (width - 48) / 3;
@@ -50,16 +48,15 @@ export default function MemoriasScreen() {
   const [fotoSelecionada, setFotoSelecionada] = useState<Foto | null>(null);
   const [mesSelecionado, setMesSelecionado] = useState<GrupoMes | null>(null);
   const [streak, setStreak] = useState(0);
+  const [fotoParaExcluir, setFotoParaExcluir] = useState<Foto | null>(null);
   const cameraRef = useRef<CameraView>(null);
   const tirouFotoRef = useRef(false);
-  const [fotoParaExcluir, setFotoParaExcluir] = useState<Foto | null>(null);
 
   const usuario = auth.currentUser;
   const hoje = new Date();
   const mesAtual = `${hoje.getMonth()}-${hoje.getFullYear()}`;
   const ultimoDiaMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
   const fimDoMes = hoje.getDate() === ultimoDiaMes;
-
 
   
   useFocusEffect(
@@ -69,47 +66,35 @@ export default function MemoriasScreen() {
     }, [])
   );
 
-useEffect(() => {
-  if (!modoCamera) return;
-  tirouFotoRef.current = false;
-  
-  const intervalo = setInterval(async () => {
-    if (tirouFotoRef.current || !cameraRef.current) return;
-    try {
-      const foto = await cameraRef.current.takePictureAsync({ quality: 0.5 });
-      if (!foto) return;
-      const faces = await FaceDetection.detect(foto.uri, {
-        performanceMode: 'fast',
-        classificationMode: 'all',
-      });
-      if (faces.length > 0) {
-        const sorriso = (faces[0].smilingProbability ?? 0) > 0.7;
-        setSorrindo(sorriso);
-        if (sorriso && !tirouFotoRef.current) {
-          tirouFotoRef.current = true;
-          clearInterval(intervalo);
-          setFotoPreview(foto.uri);
-          setModoCamera(false);
-          setSorrindo(false);
+  useEffect(() => {
+    if (!modoCamera) return;
+    tirouFotoRef.current = false;
+    const intervalo = setInterval(async () => {
+      if (tirouFotoRef.current || !cameraRef.current) return;
+      try {
+        const foto = await cameraRef.current.takePictureAsync({ quality: 0.5 });
+        if (!foto) return;
+        const faces = await FaceDetection.detect(foto.uri, {
+          performanceMode: 'fast',
+          classificationMode: 'all',
+        });
+        if (faces.length > 0) {
+          const sorriso = (faces[0].smilingProbability ?? 0) > 0.7;
+          setSorrindo(sorriso);
+          if (sorriso && !tirouFotoRef.current) {
+            tirouFotoRef.current = true;
+            clearInterval(intervalo);
+            setFotoPreview(foto.uri);
+            setModoCamera(false);
+            setSorrindo(false);
+          }
         }
+      } catch (e) {
+        console.log('Erro detecção:', e);
       }
-    } catch (e) {
-      console.log('Erro detecção:', e);
-    }
-  }, 1000);
-
-const swipePan = useRef(
-  PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > Math.abs(g.dy) && Math.abs(g.dx) > 10,
-    onPanResponderRelease: (_, g) => {
-      if (g.vx > 0.3 || g.dx > 40) router.push('/home');
-      else if (g.vx < -0.3 || g.dx < -40) router.push('/hobbies');
-    },
-  })
-).current;
-
-  return () => clearInterval(intervalo);
-}, [modoCamera]);
+    }, 1000);
+    return () => clearInterval(intervalo);
+  }, [modoCamera]);
 
   async function calcularStreak() {
     try {
@@ -117,30 +102,13 @@ const swipePan = useRef(
       const streakAtual = parseInt(await AsyncStorage.getItem('memorias_streak') || '0');
       const ontem = new Date();
       ontem.setDate(ontem.getDate() - 1);
-      const hojeStr = hoje.toDateString();
-      const ontemStr = ontem.toDateString();
-      if (ultimoDia === hojeStr || ultimoDia === ontemStr) {
+      if (ultimoDia === hoje.toDateString() || ultimoDia === ontem.toDateString()) {
         setStreak(streakAtual);
       } else {
         setStreak(0);
       }
     } catch (e) {}
   }
-
-async function excluirFoto(foto: Foto) {
-  if (!usuario) return;
-  try {
-    const { deleteDoc, doc } = await import('firebase/firestore');
-    await deleteDoc(doc(db, 'usuarios', usuario.uid, 'memorias', foto.id));
-    setFotos(f => f.filter(x => x.id !== foto.id));
-    if (mesSelecionado) {
-      setMesSelecionado(m => m ? { ...m, fotos: m.fotos.filter(x => x.id !== foto.id) } : null);
-    }
-    setFotoParaExcluir(null);
-  } catch (e) {
-    console.log('Erro ao excluir foto:', e);
-  }
-}
 
   async function atualizarStreak() {
     try {
@@ -189,14 +157,7 @@ async function excluirFoto(foto: Foto) {
         ano,
         criadaEm: Date.now(),
       });
-      const novaFoto: Foto = {
-        id: Date.now().toString(),
-        uri: fotoPreview,
-        data: dataStr,
-        mes,
-        ano,
-      };
-      setFotos(f => [novaFoto, ...f]);
+      setFotos(f => [{ id: Date.now().toString(), uri: fotoPreview!, data: dataStr, mes, ano }, ...f]);
       await atualizarStreak();
       setFotoPreview(null);
     } catch (e) {
@@ -216,28 +177,39 @@ async function excluirFoto(foto: Foto) {
         return;
       }
     }
-    if (!permissaoGaleria?.granted) {
-      await requestPermissaoGaleria();
-    }
+    if (!permissaoGaleria?.granted) await requestPermissaoGaleria();
     tirouFotoRef.current = false;
     setModoCamera(true);
   }
 
-async function compartilharFoto(uri: string) {
-  try {
-    await Share.share({ url: uri, message: 'Minha memória do dia! 😊' });
-  } catch (e) {
-    console.log('Erro ao compartilhar:', e);
+  async function excluirFoto(foto: Foto) {
+    if (!usuario) return;
+    try {
+      await deleteDoc(doc(db, 'usuarios', usuario.uid, 'memorias', foto.id));
+      setFotos(f => f.filter(x => x.id !== foto.id));
+      if (mesSelecionado) {
+        setMesSelecionado(m => m ? { ...m, fotos: m.fotos.filter(x => x.id !== foto.id) } : null);
+      }
+      setFotoParaExcluir(null);
+    } catch (e) {
+      console.log('Erro ao excluir foto:', e);
+    }
   }
-}
+
+  async function compartilharFoto(uri: string) {
+    try {
+      await Share.share({ url: uri, message: 'Minha memória do dia! 😊' });
+    } catch (e) {
+      console.log('Erro ao compartilhar:', e);
+    }
+  }
 
   function agruparPorMes(): GrupoMes[] {
     const grupos: Record<string, GrupoMes> = {};
     fotos.forEach(f => {
       const chave = `${f.mes}-${f.ano}`;
       if (!grupos[chave]) {
-        const mesNum = parseInt(f.mes);
-        grupos[chave] = { chave, label: `${MESES_NOMES[mesNum]} ${f.ano}`, fotos: [] };
+        grupos[chave] = { chave, label: `${MESES_NOMES[parseInt(f.mes)]} ${f.ano}`, fotos: [] };
       }
       grupos[chave].fotos.push(f);
     });
@@ -245,16 +217,6 @@ async function compartilharFoto(uri: string) {
   }
 
   const grupos = agruparPorMes();
-
-  // Swipe entre telas
-  const swipePan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20 && Math.abs(g.dy) < 40,
-  onPanResponderRelease: (_, g) => {
-  if (g.dx > 60) router.push('/home');
-},
-    })
-  ).current;
 
   if (modoCamera) {
     return (
@@ -275,7 +237,7 @@ async function compartilharFoto(uri: string) {
 
   if (fotoPreview) {
     return (
-      <View style={styles.container} {...swipePan.panHandlers}>
+      <View style={styles.container}>
         <View style={styles.previewContainer}>
           <Text style={styles.previewTitulo}>Ficou bom? 😊</Text>
           <View style={styles.polaroid}>
@@ -290,11 +252,9 @@ async function compartilharFoto(uri: string) {
               <Text style={styles.btnConfirmarTexto}>Salvar</Text>
             </TouchableOpacity>
           </View>
-
-<TouchableOpacity style={styles.btnExcluirPreview} onPress={() => setFotoPreview(null)}>
-  <Text style={styles.btnExcluirPreviewTexto}>Descartar foto</Text>
-</TouchableOpacity>
-
+          <TouchableOpacity style={styles.btnExcluirPreview} onPress={() => setFotoPreview(null)}>
+            <Text style={styles.btnExcluirPreviewTexto}>Descartar foto</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -303,7 +263,7 @@ async function compartilharFoto(uri: string) {
   if (mesSelecionado) {
     const ehMesAtual = mesSelecionado.chave === mesAtual;
     return (
-      <View style={styles.container} {...swipePan.panHandlers}>
+      <View style={styles.container}>
         <View style={styles.topbar}>
           <TouchableOpacity onPress={() => setMesSelecionado(null)}>
             <Text style={styles.voltar}>‹ Voltar</Text>
@@ -329,19 +289,19 @@ async function compartilharFoto(uri: string) {
           numColumns={3}
           keyExtractor={f => f.id}
           contentContainerStyle={styles.galeria}
-      renderItem={({ item }) => (
-  <TouchableOpacity
-    onPress={() => setFotoSelecionada(item)}
-    onLongPress={() => setFotoParaExcluir(item)}
-    delayLongPress={400}
-  >
-    <View style={styles.polaroidThumb}>
-      <Image source={{ uri: item.uri }} style={styles.polaroidThumbFoto} />
-      <Text style={styles.polaroidThumbData}>{item.data}</Text>
-    </View>
-  </TouchableOpacity>
-)}
-/>
+          renderItem={({ item }) => (
+            <TouchableOpacity
+              onPress={() => setFotoSelecionada(item)}
+              onLongPress={() => setFotoParaExcluir(item)}
+              delayLongPress={400}
+            >
+              <View style={styles.polaroidThumb}>
+                <Image source={{ uri: item.uri }} style={styles.polaroidThumbFoto} />
+                <Text style={styles.polaroidThumbData}>{item.data}</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+        />
 
         <Modal visible={!!fotoSelecionada} transparent animationType="fade">
           <View style={styles.modalOverlay}>
@@ -352,47 +312,54 @@ async function compartilharFoto(uri: string) {
                   <Image source={{ uri: fotoSelecionada.uri }} style={styles.polaroidGrandeFoto} />
                   <Text style={styles.polaroidGrandeData}>{fotoSelecionada.data}</Text>
                 </View>
-                <View style={styles.modalBtns}>
-                  <TouchableOpacity style={styles.btnCompartilhar} onPress={() => compartilharFoto(fotoSelecionada.uri)}>
-                    <Text style={styles.btnCompartilharTexto}>Compartilhar</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.btnFecharModal} onPress={() => setFotoSelecionada(null)}>
-                    <Text style={styles.btnFecharModalTexto}>Fechar</Text>
-                  </TouchableOpacity>
-                </View>
+               <View style={styles.modalBtns}>
+  <TouchableOpacity style={styles.btnCompartilhar} onPress={() => compartilharFoto(fotoSelecionada.uri)}>
+    <Text style={styles.btnCompartilharTexto}>Compartilhar</Text>
+  </TouchableOpacity>
+  <TouchableOpacity 
+    style={styles.btnExcluirModal} 
+    onPress={() => {
+      setFotoSelecionada(null);
+      setFotoParaExcluir(fotoSelecionada);
+    }}
+  >
+    <Text style={styles.btnExcluirModalTexto}>Excluir</Text>
+  </TouchableOpacity>
+  <TouchableOpacity style={styles.btnFecharModal} onPress={() => setFotoSelecionada(null)}>
+    <Text style={styles.btnFecharModalTexto}>Fechar</Text>
+  </TouchableOpacity>
+</View>
               </View>
             )}
             <TouchableOpacity style={{ flex: 1 }} onPress={() => setFotoSelecionada(null)} />
           </View>
         </Modal>
-     <Modal visible={!!fotoParaExcluir} transparent animationType="slide">
-  <TouchableOpacity style={styles.overlayExcluir} onPress={() => setFotoParaExcluir(null)} />
-  <View style={styles.painelExcluir}>
-    <View style={styles.painelBarra} />
-    <TouchableOpacity
-      style={styles.btnExcluir}
-      onPress={() => fotoParaExcluir && excluirFoto(fotoParaExcluir)}
-    >
-      <Text style={styles.btnExcluirTexto}>Excluir foto</Text>
-    </TouchableOpacity>
-    <TouchableOpacity style={styles.btnCancelarExcluir} onPress={() => setFotoParaExcluir(null)}>
-      <Text style={styles.btnCancelarExcluirTexto}>Cancelar</Text>
-    </TouchableOpacity>
-  </View>
-</Modal>
+
+        <Modal visible={!!fotoParaExcluir} transparent animationType="slide">
+          <TouchableOpacity style={styles.overlayExcluir} onPress={() => setFotoParaExcluir(null)} />
+          <View style={styles.painelExcluir}>
+            <View style={styles.painelBarra} />
+            <TouchableOpacity style={styles.btnExcluir} onPress={() => fotoParaExcluir && excluirFoto(fotoParaExcluir)}>
+              <Text style={styles.btnExcluirTexto}>Excluir foto</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.btnCancelarExcluir} onPress={() => setFotoParaExcluir(null)}>
+              <Text style={styles.btnCancelarExcluirTexto}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </Modal>
       </View>
     );
   }
 
   return (
-    <View style={styles.container} {...swipePan.panHandlers}>
+    <View style={styles.container}>
       <View style={styles.topbar}>
         <Text style={styles.titulo}>Memórias que Sorriem</Text>
       </View>
 
       {!fimDoMes && (
         <TouchableOpacity style={styles.bannerCamera} onPress={abrirCamera} activeOpacity={0.85}>
-          <Text style={styles.bannerCameraEmoji}>📷</Text>
+          <Image source={require('@/imagens/camera.png')} style={styles.bannerCameraIcon} />
           <View>
             <Text style={styles.bannerCameraTitulo}>Tirar foto do dia</Text>
             <Text style={styles.bannerCameraSubtitulo}>Sorria pra registrar esse momento! 😊</Text>
@@ -402,13 +369,16 @@ async function compartilharFoto(uri: string) {
 
       {fotos.length === 0 ? (
         <View style={styles.vazio}>
-          <Text style={styles.vazioEmoji}>📸</Text>
+              <Image source={require('@/imagens/camera.png')} style={styles.diarioicone} />
           <Text style={styles.vazioTitulo}>Nenhuma memória ainda</Text>
           <Text style={styles.vazioTexto}>Sorria pra câmera e capture seus momentos felizes!</Text>
         </View>
       ) : (
-       <ScrollView 
-  contentContainerStyle={{ padding: 20, gap: 16 }}directionalLockEnabled={true} scrollEventThrottle={16}>
+        <ScrollView
+          contentContainerStyle={{ padding: 20, gap: 16 }}
+          directionalLockEnabled={true}
+          nestedScrollEnabled={true}
+        >
           {grupos.map(grupo => (
             <TouchableOpacity key={grupo.chave} style={styles.cardMes} onPress={() => setMesSelecionado(grupo)}>
               <View style={styles.cardMesHeader}>
@@ -434,12 +404,15 @@ async function compartilharFoto(uri: string) {
 }
 
 const styles = StyleSheet.create({
+  btnExcluirModal: {  flex: 1, backgroundColor: '#fff5f5', borderRadius: 12, padding: 8, alignItems: 'center', borderWidth: 0.5,  borderColor: '#e08a8a' },
+btnExcluirModalTexto: {   color: '#a32d2d', fontWeight: '600' , fontSize: 19, justifyContent: 'center', alignItems: 'center', },
   container: { flex: 1, backgroundColor: '#dff0f4' },
   topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 },
   titulo: { fontSize: 18, fontWeight: '600', color: '#2a6b7c', flex: 1, textAlign: 'center' },
   voltar: { fontSize: 16, color: '#5a8a96' },
   btnCamera: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#b6dae0', alignItems: 'center', justifyContent: 'center' },
   btnCameraTexto: { fontSize: 22 },
+  diarioicone: {width: 128,  height: 128,opacity: 0.4,},
   bannerCamera: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#2a6b7c', marginHorizontal: 20, marginBottom: 16, borderRadius: 16, padding: 16 },
   bannerCameraEmoji: { fontSize: 36 },
   bannerCameraTitulo: { fontSize: 16, fontWeight: '600', color: '#fff' },
@@ -483,22 +456,18 @@ const styles = StyleSheet.create({
   polaroidGrandeFoto: { width: width - 120, height: width - 120, borderRadius: 2 },
   polaroidGrandeData: { fontSize: 13, color: '#5a8a96', marginTop: 10, fontStyle: 'italic' },
   modalBtns: { flexDirection: 'row', gap: 12 },
-  btnCompartilhar: { flex: 1, backgroundColor: '#2a6b7c', borderRadius: 12, padding: 12, alignItems: 'center' },
-  btnCompartilharTexto: { color: '#fff', fontWeight: '600' },
-  btnFecharModal: { flex: 1, backgroundColor: '#b6dae0', borderRadius: 12, padding: 12, alignItems: 'center' },
-  btnFecharModalTexto: { color: '#2a6b7c', fontWeight: '600' },
+  btnCompartilhar: { flex: 1, backgroundColor: '#2a6b7c', borderRadius: 12, padding: 8, alignItems: 'center' },
+  btnCompartilharTexto: { color: '#fff', fontWeight: '600', fontSize: 18, justifyContent: 'center', alignItems: 'center',  },
+  btnFecharModal: { flex: 1, backgroundColor: '#b6dae0', borderRadius: 12, padding: 8, alignItems: 'center',  },
+  btnFecharModalTexto: { color: '#2a6b7c', fontWeight: '600',  fontSize: 18, justifyContent: 'center', alignItems: 'center',  },
   overlayExcluir: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' },
-painelExcluir: {
-  backgroundColor: '#f0f8fa',
-  borderTopLeftRadius: 20, borderTopRightRadius: 20,
-  padding: 20, paddingBottom: 40, gap: 12,
-  alignItems: 'center',
-},
-painelBarra: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#b6dae0', marginBottom: 8 },
-btnExcluir: { width: '100%', padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#fff5f5', borderWidth: 0.5, borderColor: '#e08a8a' },
-btnExcluirTexto: { color: '#a32d2d', fontSize: 16, fontWeight: '600' },
-btnCancelarExcluir: { width: '100%', padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#f0f8fa' },
-btnCancelarExcluirTexto: { color: '#5a8a96', fontSize: 15 },
-btnExcluirPreview: { marginTop: 4, padding: 10, alignItems: 'center', width: '70%', backgroundColor: '#e08a8a', borderWidth: 1, borderRadius: 12, borderColor:'#0000' },
-btnExcluirPreviewTexto: { color: '#131111', fontSize: 14 },
+  painelExcluir: { backgroundColor: '#f0f8fa', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 40, gap: 12, alignItems: 'center' },
+  painelBarra: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#b6dae0', marginBottom: 8 },
+  btnExcluir: { width: '100%', padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#fff5f5', borderWidth: 0.5, borderColor: '#e08a8a' },
+  btnExcluirTexto: { color: '#a32d2d', fontSize: 16, fontWeight: '600' },
+  btnCancelarExcluir: { width: '100%', padding: 16, borderRadius: 12, alignItems: 'center', backgroundColor: '#f0f8fa' },
+  btnCancelarExcluirTexto: { color: '#5a8a96', fontSize: 15 },
+  btnExcluirPreview: { marginTop: 4, padding: 10, alignItems: 'center', width: '70%', backgroundColor: '#e08a8a', borderWidth: 1, borderRadius: 12, borderColor: '#0000' },
+  btnExcluirPreviewTexto: { color: '#131111', fontSize: 14 },
+  bannerCameraIcon: { width: 50, height: 50},
 });

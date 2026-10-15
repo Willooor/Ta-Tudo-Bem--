@@ -8,6 +8,7 @@ import {
 import { useState } from 'react';
 import {
     Alert,
+    Image,
     KeyboardAvoidingView,
     Platform,
     ScrollView,
@@ -18,7 +19,6 @@ import {
     View,
 } from 'react-native';
 
-
 export default function CadastroScreen() {
   const [usuario, setUsuario] = useState('');
   const [email, setEmail] = useState('');
@@ -26,7 +26,7 @@ export default function CadastroScreen() {
   const [confirmarSenha, setConfirmarSenha] = useState('');
   const [carregando, setCarregando] = useState(false);
   const [mostrarSenha, setMostrarSenha] = useState(false);
-const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
+  const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
 
   async function handleCadastro() {
     if (!usuario || !email || !senha || !confirmarSenha) {
@@ -77,14 +77,14 @@ const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
         <View style={styles.card}>
           <Text style={styles.label}>Usuário</Text>
           <TextInput
-  style={styles.input}
-  placeholder="como quer ser chamado?"
-  placeholderTextColor="#a0b8bf"
-  value={usuario}
-  onChangeText={setUsuario}
-  maxLength={30}
-/>
-  
+            style={styles.input}
+            placeholder="como quer ser chamado?"
+            placeholderTextColor="#a0b8bf"
+            value={usuario}
+            onChangeText={setUsuario}
+            maxLength={30}
+          />
+
           <Text style={styles.label}>E-mail</Text>
           <TextInput
             style={styles.input}
@@ -95,35 +95,42 @@ const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
             keyboardType="email-address"
             autoCapitalize="none"
           />
-         <Text style={styles.label}>Senha</Text>
-<View style={styles.inputRow}>
-  <TextInput
-    style={[styles.input, { flex: 1, marginBottom: 0 }]}
-    placeholder="mínimo 8 caracteres"
-    placeholderTextColor="#a0b8bf"
-    value={senha}
-    onChangeText={setSenha}
-    secureTextEntry={!mostrarSenha}
-  />
-  <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarSenha(!mostrarSenha)}>
-    <Text>{mostrarSenha ? '👁️' : '🙈'}</Text>
-  </TouchableOpacity>
-</View>
 
-<Text style={styles.label}>Confirmar senha</Text>
-<View style={styles.inputRow}>
-  <TextInput
-    style={[styles.input, { flex: 1, marginBottom: 0 }]}
-    placeholder="repita a senha"
-    placeholderTextColor="#a0b8bf"
-    value={confirmarSenha}
-    onChangeText={setConfirmarSenha}
-    secureTextEntry={!mostrarConfirmarSenha}
-  />
-  <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarConfirmarSenha(!mostrarConfirmarSenha)}>
-    <Text>{mostrarConfirmarSenha ? '👁️' : '🙈'}</Text>
-  </TouchableOpacity>
-</View>
+          <Text style={styles.label}>Senha</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[styles.inputSemBorda, { flex: 1 }]}
+              placeholder="mínimo 8 caracteres"
+              placeholderTextColor="#a0b8bf"
+              value={senha}
+              onChangeText={setSenha}
+              secureTextEntry={!mostrarSenha}
+            />
+            <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarSenha(!mostrarSenha)}>
+              <Image
+                source={mostrarSenha ? require('@/imagens/olho.jpeg') : require('@/imagens/olho_fechado.jpeg')}
+                style={{ width: 34, height: 34 }}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.label}>Confirmar senha</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              style={[styles.inputSemBorda, { flex: 1 }]}
+              placeholder="repita a senha"
+              placeholderTextColor="#a0b8bf"
+              value={confirmarSenha}
+              onChangeText={setConfirmarSenha}
+              secureTextEntry={!mostrarConfirmarSenha}
+            />
+            <TouchableOpacity style={styles.olhinho} onPress={() => setMostrarConfirmarSenha(!mostrarConfirmarSenha)}>
+              <Image
+                source={mostrarConfirmarSenha ? require('@/imagens/olho.jpeg') : require('@/imagens/olho_fechado.jpeg')}
+                style={{ width: 24, height: 24 }}
+              />
+            </TouchableOpacity>
+          </View>
 
           <TouchableOpacity
             style={styles.btnPrimary}
@@ -135,10 +142,19 @@ const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.back()}>
-            <Text style={styles.linkText}>
-              Já possui uma conta?{' '}
-              <Text style={styles.linkDestaque}>Entrar.</Text>
+          <Text style={styles.linkText}>
+            Já tem uma conta?{' '}
+            <Text style={styles.linkDestaque} onPress={() => router.push('/')}>
+              Entrar
+            </Text>
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => router.push('/sobre')}
+            style={{ marginTop: 16, alignSelf: 'center', padding: 10 }}
+          >
+            <Text style={{ fontSize: 14, color: '#5a8a96' }}>
+              Dúvidas? <Text style={{ fontWeight: 'bold', color: '#2a6b7c' }}>Sobre</Text>
             </Text>
           </TouchableOpacity>
         </View>
@@ -148,22 +164,27 @@ const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false);
 }
 
 const styles = StyleSheet.create({
+  inputSemBorda: {
+    padding: 12,
+    fontSize: 15,
+    color: '#2a6b7c',
+  },
   container: {
     flex: 1,
     backgroundColor: '#dff0f4',
   },
   inputRow: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  borderWidth: 1,
-  borderColor: '#b6dae0',
-  borderRadius: 12,
-  backgroundColor: '#ffffff',
-  marginBottom: 16,
-},
-olhinho: {
-  padding: 12,
-},
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#b6dae0',
+    borderRadius: 12,
+    backgroundColor: '#ffffff',
+    marginBottom: 16,
+  },
+  olhinho: {
+    padding: 12,
+  },
   scroll: {
     padding: 24,
     justifyContent: 'center',

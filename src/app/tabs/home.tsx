@@ -1,10 +1,13 @@
 import { auth, db } from '@/config/firebase';
+import { useNavegacao } from '@/contexts/navegacao';
 import { router, useFocusEffect } from 'expo-router';
+import { signOut } from 'firebase/auth';
 import { collection, deleteDoc, doc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
+    Alert,
+    Image,
     Modal,
-    PanResponder,
     ScrollView,
     StyleSheet,
     Text,
@@ -13,10 +16,10 @@ import {
     View,
 } from 'react-native';
 
-const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const MESES_CURTO = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 const DIAS_SEMANA_LABEL = ['D','S','T','Q','Q','S','S'];
 const DIAS_SEMANA_FULL = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
 const hoje = new Date();
 
 type Folha = {
@@ -42,7 +45,6 @@ export default function HomeScreen() {
   const [mesSel, setMesSel] = useState(hoje.getMonth());
   const [anoSel, setAnoSel] = useState(hoje.getFullYear());
   const [calAberto, setCalAberto] = useState(false);
-  const [abaAtiva, setAbaAtiva] = useState<'diario' | 'memorias' | 'hobbies'>('diario');
   const [fabAberto, setFabAberto] = useState(false);
   const [modoDelete, setModoDelete] = useState(false);
   const [ordenacao, setOrdenacao] = useState<Ordenacao>('recente');
@@ -52,6 +54,7 @@ export default function HomeScreen() {
   const [folhaPendente, setFolhaPendente] = useState<Folha | null>(null);
   const [pinDigitado, setPinDigitado] = useState('');
   const [pinErro, setPinErro] = useState(false);
+  const { irParaPagina } = useNavegacao();
 
   useFocusEffect(
     useCallback(() => {
@@ -75,6 +78,28 @@ export default function HomeScreen() {
       buscarFolhas();
     }, [])
   );
+
+  async function handleSair() {
+  Alert.alert(
+    'Sair da conta',
+    'Tem certeza que quer sair?',
+    [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Sair',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut(auth);
+            router.replace('/');
+          } catch (e) {
+            console.log('Erro ao sair:', e);
+          }
+        },
+      },
+    ]
+  );
+}
 
   const chave = `${anoSel}-${mesSel}-${diaSel}`;
   const nomeDia = DIAS_SEMANA_FULL[new Date(anoSel, mesSel, diaSel).getDay()];
@@ -136,9 +161,7 @@ export default function HomeScreen() {
     try {
       await updateDoc(doc(db, 'usuarios', usuario.uid, 'folhas', id), { favorita: !folha.favorita });
       setFolhas(f => f.map(x => x.id === id ? { ...x, favorita: !x.favorita } : x));
-    } catch (e) {
-      console.log('Erro ao favoritar:', e);
-    }
+    } catch (e) {}
   }
 
   async function abrirFolha(folha: Folha) {
@@ -172,6 +195,35 @@ export default function HomeScreen() {
     router.push({ pathname: '/folha', params: { id: folhaPendente.id, titulo: folhaPendente.titulo, dataISO: folhaPendente.dataISO } });
   }
 
+function esquecerPin() {
+  Alert.alert(
+    'Esqueceu o PIN?',
+    'Como você está logado na sua conta, podemos remover o PIN desta folha. Deseja continuar?',
+    [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover PIN',
+        style: 'destructive',
+        onPress: async () => {
+          const usuario = auth.currentUser;
+          if (!usuario || !folhaPendente) return;
+          try {
+            await updateDoc(doc(db, 'usuarios', usuario.uid, 'folhas', folhaPendente.id), { pin: '' });
+            setFolhas(f => f.map(x => x.id === folhaPendente.id ? { ...x, pin: '' } : x));
+            setPinModalAberto(false);
+            setFolhaPendente(null);
+            setPinDigitado('');
+            Alert.alert('Pronto!', 'O PIN foi removido. Toque na folha novamente para abrir.');
+          } catch (e) {
+            console.log('Erro ao remover PIN:', e);
+            Alert.alert('Erro', 'Não foi possível remover o PIN.');
+          }
+        }
+      }
+    ]
+  );
+}
+
   function renderCalendario() {
     const primeiro = new Date(anoSel, mesSel, 1).getDay();
     const total = new Date(anoSel, mesSel + 1, 0).getDate();
@@ -189,110 +241,87 @@ export default function HomeScreen() {
     setAnoSel(a);
   }
 
-const swipePan = useRef(
-  PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 20 && Math.abs(g.dy) < 40,
-    onPanResponderRelease: (_, g) => {
-      if (g.dx > 60) router.push('/memorias');
-      else if (g.dx < -60) router.push('/hobbies');
-    },
-  })
-).current;
-
   return (
-<View style={styles.container} {...swipePan.panHandlers}>
-      <View style={styles.topbar}>
-        <TouchableOpacity onPress={() => setCalAberto(true)}>
-          <Text style={styles.dataBtn}>{dataFormatada} ▾</Text>
-        </TouchableOpacity>
-        <Text style={styles.appTitulo}>Tá tudo bem?</Text>
-      </View>
+    <View style={styles.container}>
+     <View style={styles.topbar}>
+  <TouchableOpacity onPress={() => setCalAberto(true)}>
+    <Text style={styles.dataBtn}>{dataFormatada} ▾</Text>
+  </TouchableOpacity>
+  <Text style={styles.appTitulo}>Tá tudo bem?</Text>
+  <TouchableOpacity onPress={handleSair} style={styles.btnSair}>
+    <Text style={styles.btnSairTexto}>Sair</Text>
+  </TouchableOpacity>
+</View>
 
-      {abaAtiva === 'diario' && (
-        <TouchableOpacity style={styles.ordenacaoBtn} onPress={() => setOrdenacaoAberta(true)}>
-          <Text style={styles.ordenacaoTexto}>↕ {ORDEM_LABELS[ordenacao]}</Text>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity style={styles.ordenacaoBtn} onPress={() => setOrdenacaoAberta(true)}>
+        <Text style={styles.ordenacaoTexto}>↕ {ORDEM_LABELS[ordenacao]}</Text>
+      </TouchableOpacity>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {abaAtiva === 'diario' && (
-          folhasDoDia.length > 0 ? (
-            folhasDoDia.map((folha) => (
-              <TouchableOpacity key={folha.id} style={styles.folha} onPress={() => !modoDelete && abrirFolha(folha)}>
-                <View style={styles.folhaHeader}>
-                  <Text style={styles.folhaTitulo}>{folha.titulo}</Text>
-                  <View style={styles.folhaAcoes}>
-                    {!modoDelete && (
-                      <TouchableOpacity onPress={() => toggleFavorita(folha.id)}>
-                        <Text style={styles.estrela}>{folha.favorita ? '⭐' : '☆'}</Text>
-                      </TouchableOpacity>
-                    )}
-                    {!!folha.pin && <Text style={{ fontSize: 12 }}>🔒</Text>}
-                    {modoDelete && (
-                      <TouchableOpacity onPress={() => deletarFolha(folha.id)}>
-                        <View style={styles.btnDel}>
-                          <Text style={styles.btnDelTexto}>✕</Text>
-                        </View>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+        {folhasDoDia.length > 0 ? (
+          folhasDoDia.map((folha) => (
+            <TouchableOpacity key={folha.id} style={styles.folha} onPress={() => !modoDelete && abrirFolha(folha)}>
+              <View style={styles.folhaHeader}>
+                <Text style={styles.folhaTitulo}>{folha.titulo}</Text>
+                <View style={styles.folhaAcoes}>
+                  {!modoDelete && (
+                    <TouchableOpacity onPress={() => toggleFavorita(folha.id)}>
+                      <Text style={styles.estrela}>{folha.favorita ? '⭐' : '☆'}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {!!folha.pin && <Text style={{ fontSize: 12 }}>🔒</Text>}
+                  {modoDelete && (
+                    <TouchableOpacity onPress={() => deletarFolha(folha.id)}>
+                      <View style={styles.btnDel}>
+                        <Text style={styles.btnDelTexto}>✕</Text>
+                      </View>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                <Text style={styles.folhaData}>{diaSel} {MESES_CURTO[mesSel]}</Text>
-              </TouchableOpacity>
-            ))
-          ) : (
-            <View style={styles.vazio}>
-              <Text style={styles.vazioEmoji}>📓</Text>
-              <Text style={styles.vazioTexto}>Nenhuma folha neste dia</Text>
-            </View>
-          )
-        )}
-        {abaAtiva === 'memorias' && (
+              </View>
+              <Text style={styles.folhaData}>{diaSel} {MESES_CURTO[mesSel]}</Text>
+            </TouchableOpacity>
+          ))
+        ) : (
           <View style={styles.vazio}>
-            <Text style={styles.vazioEmoji}>📷</Text>
-            <Text style={styles.vazioTexto}>Em breve</Text>
-          </View>
-        )}
-        {abaAtiva === 'hobbies' && (
-          <View style={styles.vazio}>
-            <Text style={styles.vazioEmoji}>✅</Text>
-            <Text style={styles.vazioTexto}>Em breve</Text>
+         <Image source={require('@/imagens/livro.png')} style={styles.diarioicone} />
+            <Text style={styles.vazioTexto}>Nenhuma folha neste dia</Text>
           </View>
         )}
       </ScrollView>
 
-      {abaAtiva === 'diario' && (
-        <View style={styles.fabArea}>
-          {fabAberto && (
-            <>
-              <TouchableOpacity style={[styles.fabSub, modoDelete && styles.fabSubAtivo]} onPress={() => setModoDelete(!modoDelete)}>
-                <Text style={styles.fabSubIcon}>🗑️</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.fabSub} onPress={criarFolha}>
-                <Text style={styles.fabSubIcon}>✍️</Text>
-              </TouchableOpacity>
-            </>
-          )}
-          <TouchableOpacity style={styles.fab} onPress={toggleFab}>
-            <Text style={styles.fabIcon}>{fabAberto ? '✕' : '+'}</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={styles.navbar}>
-     <TouchableOpacity style={styles.btn} onPress={() => router.push('/memorias')}>
-  <Text style={[styles.btnIcon, abaAtiva === 'memorias' && styles.btnIconAtivo]}>📷</Text>
-  <Text style={styles.btnLabel}>Memórias</Text>
-</TouchableOpacity>
-        <TouchableOpacity style={styles.btn} onPress={() => setAbaAtiva('diario')}>
-          <Text style={[styles.btnIcon, abaAtiva === 'diario' && styles.btnIconAtivo]}>📖</Text>
-          <Text style={styles.btnLabel}>Diário</Text>
+      <View style={styles.fabArea}>
+        {fabAberto && (
+          <>
+            <TouchableOpacity style={[styles.fabSub, modoDelete && styles.fabSubAtivo]} onPress={() => setModoDelete(!modoDelete)}>
+              <Text style={styles.fabSubIcon}>🗑️</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.fabSub} onPress={criarFolha}>
+              <Text style={styles.fabSubIcon}>✍️</Text>
+            </TouchableOpacity>
+          </>
+        )}
+        <TouchableOpacity style={styles.fab} onPress={toggleFab}>
+          <Text style={styles.fabIcon}>{fabAberto ? '✕' : '+'}</Text>
         </TouchableOpacity>
-   <TouchableOpacity style={styles.btn} onPress={() => router.push('/hobbies')}>
-  <Text style={[styles.btnIcon, abaAtiva === 'hobbies' && styles.btnIconAtivo]}>✅</Text>
-  <Text style={styles.btnLabel}>Hobbies</Text>
-</TouchableOpacity>
       </View>
+
+<View style={styles.navbar}>
+  <TouchableOpacity style={styles.btn} onPress={() => irParaPagina(0)}>
+    <Image source={require('@/imagens/camera.png')} style={styles.btnIcone} />
+    <Text style={styles.btnLabel}>Memórias</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity style={styles.btn} onPress={() => irParaPagina(1)}>
+    <Image source={require('@/imagens/diario.png')} style={styles.btnIconeAtivo} />
+    <Text style={styles.btnLabel}>Diário</Text>
+  </TouchableOpacity>
+
+  <TouchableOpacity style={styles.btn} onPress={() => irParaPagina(2)}>
+    <Image source={require('@/imagens/check.png')} style={styles.btnIcone} />
+    <Text style={styles.btnLabel}>Hobbies</Text>
+  </TouchableOpacity>
+</View>
 
       <Modal visible={calAberto} transparent animationType="fade">
         <TouchableOpacity style={styles.overlay} onPress={() => setCalAberto(false)} />
@@ -350,7 +379,6 @@ const swipePan = useRef(
               <Text style={styles.pinFechar}>Cancelar</Text>
             </TouchableOpacity>
           </View>
-          
           <View style={{ padding: 20, gap: 16 }}>
             <Text style={styles.pinDescricao}>Digite o PIN para abrir "{folhaPendente?.titulo ?? ''}"</Text>
             <TextInput
@@ -368,9 +396,9 @@ const swipePan = useRef(
             <TouchableOpacity style={[styles.pinBtnConfirmar, pinDigitado.length !== 4 && { opacity: 0.5 }]} onPress={confirmarPin} disabled={pinDigitado.length !== 4}>
               <Text style={styles.pinBtnTexto}>Confirmar</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => { setPinModalAberto(false); setPinDigitado(''); }}>
-              <Text style={styles.pinEsqueceu}>Esqueceu o PIN? ID da folha: {folhaPendente?.id ?? ''}</Text>
-            </TouchableOpacity>
+         <TouchableOpacity onPress={esquecerPin}>
+  <Text style={styles.pinEsqueceu}>Esqueceu o PIN?</Text>
+</TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -379,8 +407,13 @@ const swipePan = useRef(
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#dff0f4' },
+  container: { flex: 1, backgroundColor: '#dff0f4',  paddingBottom: 20, },
   topbar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 56, paddingBottom: 8 },
+  btnSair: { backgroundColor: '#f5c4c4',  paddingVertical: 6,  paddingHorizontal: 20, borderRadius: 12,},
+btnSairTexto: { color: '#a32d2d',fontSize: 14,  fontWeight: '600',},
+btnIcone: {width: 34,  height: 34,opacity: 0.4,},
+diarioicone: {width: 128,  height: 128,opacity: 0.4,},
+btnIconeAtivo: { width: 32, height: 32, opacity: 1,},
   dataBtn: { fontSize: 12, color: '#5a8a96', textDecorationLine: 'underline' },
   appTitulo: { fontSize: 16, fontWeight: '600', color: '#2a6b7c' },
   ordenacaoBtn: { paddingHorizontal: 20, paddingBottom: 8 },
@@ -403,7 +436,7 @@ const styles = StyleSheet.create({
   fabSubIcon: { fontSize: 18 },
   fab: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#2a6b7c', alignItems: 'center', justifyContent: 'center', elevation: 4 },
   fabIcon: { color: '#fff', fontSize: 24, fontWeight: '300', textAlign: 'center', includeFontPadding: false },
-  navbar: { backgroundColor: '#f0f8fa', borderTopWidth: 0.5, borderTopColor: '#b6dae0', flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10, paddingBottom: 24 },
+ navbar: { backgroundColor: '#f0f8fa', borderTopWidth: 0.5, borderTopColor: '#b6dae0', flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 10, paddingBottom: 14,},
   btn: { alignItems: 'center', gap: 4 },
   btnIcon: { fontSize: 20, opacity: 0.4 },
   btnIconAtivo: { fontSize: 28, opacity: 1 },
